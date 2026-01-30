@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>국내주식 주가 검색 챗봇</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📈 국내주식 주가 검색 챗봇</h1>
+      <p>Gemini AI와 함께하는 스마트 주가 조회</p>
+    </header>
+
+    <div class="chat-container">
+      <div class="chat-messages" id="chatMessages">
+        <div class="message bot-message">
+          <div class="message-content">
+            안녕하세요! 국내주식 주가를 검색해드리는 챗봇입니다. 😊<br>
+            예를 들어 "삼성전자 주가 알려줘" 또는 "005930 현재가는?"과 같이 질문해주세요.
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-container">
+        <input 
+          type="text" 
+          id="messageInput" 
+          placeholder="주식 종목명이나 종목코드를 입력하세요..."
+          autocomplete="off"
+        >
+        <button id="sendButton">전송</button>
+      </div>
+    </div>
+
+    <div class="loading" id="loading" style="display: none;">
+      <div class="spinner"></div>
+      <span>응답을 기다리는 중...</span>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

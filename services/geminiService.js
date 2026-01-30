@@ -1,0 +1,98 @@
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+require('dotenv').config();
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+/**
+ * Gemini API를 사용하여 채팅을 처리하는 함수
+ */
+async function chatWithGemini(chatHistory, functionCallHandler) {
+  console.log('--- Gemini Chat Start ---');
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY가 설정되지 않았습니다.');
+    }
+
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-flash',
+      tools: [{
+        functionDeclarations: [{
+          name: 'getStockPrice',
+          description: '한국 주식의 현재 주가 정보를 조회합니다. 종목명 또는 종목코드를 입력받습니다.',
+          parameters: {
+            type: 'object',
+            properties: {
+              symbol: {
+                type: 'string',
+                description: '주식 종목명 또는 종목코드 (예: "삼성전자", "005930")'
+              }
+            },
+            required: ['symbol']
+          }
+        }]
+      }]
+    });
+
+    const formattedHistory = chatHistory.map(msg => ({
+      role: msg.role === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.content }]
+    }));
+
+    const lastMessage = formattedHistory[formattedHistory.length - 1];
+    console.log('[User Message]:', lastMessage.parts[0].text);
+
+    const chat = model.startChat({
+      history: formattedHistory.slice(0, -1),
+    });
+
+    const result = await chat.sendMessage(lastMessage.parts[0].text);
+    const response = result.response;
+    const functionCalls = response.functionCalls();
+    
+    if (functionCalls && functionCalls.length > 0) {
+      const functionCall = functionCalls[0];
+      console.log('[Gemini Request Function]:', functionCall.name, functionCall.args);
+      
+      if (functionCall.name === 'getStockPrice') {
+        const symbol = functionCall.args.symbol;
+        const stockInfo = await functionCallHandler(symbol);
+        console.log('[Function Result]:', stockInfo);
+        
+        const followUpResult = await chat.sendMessage([
+          {
+            functionResponse: {
+              name: 'getStockPrice',
+              response: { content: stockInfo }
+            }
+          }
+        ]);
+
+        const followUpResponse = followUpResult.response;
+        console.log('[Gemini Final Response]:', followUpResponse.text());
+        return {
+          success: true,
+          message: followUpResponse.text(),
+          functionCalled: true
+        };
+      }
+    }
+
+    console.log('[Gemini Response]:', response.text());
+    return {
+      success: true,
+      message: response.text(),
+      functionCalled: false
+    };
+
+  } catch (error) {
+    console.error('[Gemini API Error]:', error);
+    return {
+      success: false,
+      error: error.message || 'Gemini API 호출 중 오류가 발생했습니다.'
+    };
+  } finally {
+    console.log('--- Gemini Chat End ---');
+  }
+}
+
+module.exports = { chatWithGemini };

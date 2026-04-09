@@ -5,8 +5,9 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /**
  * Gemini API를 사용하여 채팅을 처리하는 함수
+ * @param {Function} executeTool (toolName, args) => Promise<object>
  */
-async function chatWithGemini(chatHistory, functionCallHandler) {
+async function chatWithGemini(chatHistory, executeTool) {
   console.log('--- Gemini Chat Start ---');
   try {
     if (!process.env.GEMINI_API_KEY) {
@@ -16,21 +17,38 @@ async function chatWithGemini(chatHistory, functionCallHandler) {
     const model = genAI.getGenerativeModel({ 
       model: 'gemini-2.5-flash',
       tools: [{
-        functionDeclarations: [{
-          name: 'getStockPrice',
-          description: '한국 주식의 현재 주가 정보를 조회합니다. 종목명 또는 종목코드를 입력받습니다.',
-          parameters: {
-            type: 'object',
-            properties: {
-              symbol: {
-                type: 'string',
-                description: '주식 종목명 또는 종목코드 (예: "삼성전자", "005930")'
-              }
+        functionDeclarations: [
+          {
+            name: 'getStockPrice',
+            description: '한국 주식의 현재 주가 정보만 조회합니다. 당일 등락 등. 작년 대비 비교가 아닐 때 사용합니다.',
+            parameters: {
+              type: 'object',
+              properties: {
+                symbol: {
+                  type: 'string',
+                  description: '주식 종목명 또는 종목코드 (예: "삼성전자", "005930")',
+                },
+              },
+              required: ['symbol'],
             },
-            required: ['symbol']
-          }
-        }]
-      }]
+          },
+          {
+            name: 'getStockYearOverYearComparison',
+            description:
+              '한국 주식의 현재 주가와 "작년 같은 날짜(서울 기준)"에 가장 가까운 영업일 종가를 비교합니다. YoY, 전년 동월대비, 1년 전과 비교 등의 질문에 사용합니다.',
+            parameters: {
+              type: 'object',
+              properties: {
+                symbol: {
+                  type: 'string',
+                  description: '주식 종목명 또는 종목코드 (예: "삼성전자", "005930")',
+                },
+              },
+              required: ['symbol'],
+            },
+          },
+        ],
+      }],
     });
 
     const formattedHistory = chatHistory.map(msg => ({
@@ -52,19 +70,20 @@ async function chatWithGemini(chatHistory, functionCallHandler) {
     if (functionCalls && functionCalls.length > 0) {
       const functionCall = functionCalls[0];
       console.log('[Gemini Request Function]:', functionCall.name, functionCall.args);
-      
-      if (functionCall.name === 'getStockPrice') {
-        const symbol = functionCall.args.symbol;
-        const stockInfo = await functionCallHandler(symbol);
-        console.log('[Function Result]:', stockInfo);
-        
+
+      const toolName = functionCall.name;
+      const allowed = ['getStockPrice', 'getStockYearOverYearComparison'];
+      if (allowed.includes(toolName)) {
+        const payload = await executeTool(toolName, functionCall.args || {});
+        console.log('[Function Result]:', payload);
+
         const followUpResult = await chat.sendMessage([
           {
             functionResponse: {
-              name: 'getStockPrice',
-              response: { content: stockInfo }
-            }
-          }
+              name: toolName,
+              response: { content: payload },
+            },
+          },
         ]);
 
         const followUpResponse = followUpResult.response;
@@ -72,7 +91,7 @@ async function chatWithGemini(chatHistory, functionCallHandler) {
         return {
           success: true,
           message: followUpResponse.text(),
-          functionCalled: true
+          functionCalled: true,
         };
       }
     }

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { chatWithGemini } = require('../services/geminiService');
-const { getStockInfo } = require('../services/naverStock');
+const { getStockInfo, getStockInfoYearOverYear } = require('../services/naverStock');
 
 /**
  * POST /api/chat
@@ -27,14 +27,17 @@ router.post('/', async (req, res) => {
       }
     ];
 
-    // 함수 호출 핸들러 정의
-    const functionCallHandler = async (symbol) => {
-      const stockInfo = await getStockInfo(symbol);
-      return stockInfo;
+    const executeTool = async (toolName, args) => {
+      const symbol = args.symbol;
+      if (!symbol || typeof symbol !== 'string') {
+        return { success: false, error: '종목명 또는 종목코드가 필요합니다.' };
+      }
+      if (toolName === 'getStockPrice') return getStockInfo(symbol.trim());
+      if (toolName === 'getStockYearOverYearComparison') return getStockInfoYearOverYear(symbol.trim());
+      return { success: false, error: '지원하지 않는 도구입니다.' };
     };
 
-    // Gemini API 호출
-    const result = await chatWithGemini(chatHistory, functionCallHandler);
+    const result = await chatWithGemini(chatHistory, executeTool);
 
     if (!result.success) {
       return res.status(500).json(result);
